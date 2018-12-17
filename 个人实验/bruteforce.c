@@ -42,11 +42,17 @@ int main(int argc, char **argv)
         {
             t2 = MPI_Wtime();
             printf("result: %d\ntime: %f\n", i, t2 - t1);
-            MPI_Abort(MPI_COMM_WORLD, 0);
+            //MPI_Abort(MPI_COMM_WORLD, 0);
         }
         if (i % 10000000 == 0)
             printf("%d\n", i);
     }
+
+    printf("MPI %d/%d finished\n", rank, size);
+    MPI_Barrier(MPI_COMM_WORLD);
+    t2 = MPI_Wtime();
+    if (rank == 0)
+        printf("Total time: %f\n", t2 - t1);
 
     MPI_Finalize();
     return 0;
