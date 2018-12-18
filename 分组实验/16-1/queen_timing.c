@@ -1,8 +1,8 @@
 #include <mpi.h>
 #include <stdio.h>
 
-#define QUEENS 8
-#define MAX_SOLUTIONS 92
+#define QUEENS 14
+#define MAX_SOLUTIONS 365596
 
 typedef int bool;
 const int true = 1;
@@ -199,6 +199,9 @@ void eight_queens_master(int nodes)
     int num_solutions;
     int seed;
 
+    double t1, t2;
+    t1 = MPI_Wtime();
+
     while (active_slaves)                         /*有未结束的子进程*/
     {
 		/*从子进程中接受返回信号*/
@@ -236,8 +239,12 @@ void eight_queens_master(int nodes)
         }
     }                                             /* while */
 
+    t2 = MPI_Wtime();
+
 	/*打印所有解*/
-    print_solutions(solution_count, solutions);
+    //print_solutions(solution_count, solutions);
+    printf("Solution count: %d\n", solution_count);
+    printf("Total time: %f\n", t2 - t1);
 }                                                 /* eight_queens_master */
 
 

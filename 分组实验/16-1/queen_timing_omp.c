@@ -1,8 +1,9 @@
 #include <mpi.h>
+#include <omp.h>
 #include <stdio.h>
 
-#define QUEENS 8
-#define MAX_SOLUTIONS 92
+#define QUEENS 14
+#define MAX_SOLUTIONS 365596
 
 typedef int bool;
 const int true = 1;
@@ -59,13 +60,9 @@ int generate_seed()
 {
     static int seed = 0;
 
-    do
-    {
-        seed++;
-    } while (seed <= QUEENS * QUEENS - 1
-        && collides(0, seed / QUEENS, 1, seed % QUEENS));
+    seed++;
 
-    if (seed > QUEENS * QUEENS - 1)
+    if (seed > QUEENS)
         return 0;
     else
         return seed;
@@ -141,11 +138,14 @@ void place_queens(int chessboard[], int row)
     if (row >= QUEENS)                            /*所有皇后均摆放完毕*/
     {
 		/* 结束递归并记录当前解 */
-        for (i = 0; i < QUEENS; i++)
+        #pragma omp critical
         {
-            solutions[solution_count][i] = chessboard[i];
+            for (i = 0; i < QUEENS; i++)
+            {
+                solutions[solution_count][i] = chessboard[i];
+            }
+            solution_count++;
         }
-        solution_count++;
     }
     else
     {
@@ -199,6 +199,9 @@ void eight_queens_master(int nodes)
     int num_solutions;
     int seed;
 
+    double t1, t2;
+    t1 = MPI_Wtime();
+
     while (active_slaves)                         /*有未结束的子进程*/
     {
 		/*从子进程中接受返回信号*/
@@ -223,6 +226,7 @@ void eight_queens_master(int nodes)
         seed = generate_seed();                   /*产生初始棋盘*/
         if (seed)                                 /* 还有新的初始棋盘 */
         {
+            seed--;
 			/* 向子进程发送一个new_task信号 */
             MPI_Send(&new_task, 1, MPI_INT, child, REQUEST_TAG, MPI_COMM_WORLD);
 			/* 向子进程发送一个合法的新棋盘 */
@@ -236,8 +240,12 @@ void eight_queens_master(int nodes)
         }
     }                                             /* while */
 
+    t2 = MPI_Wtime();
+
 	/*打印所有解*/
-    print_solutions(solution_count, solutions);
+    //print_solutions(solution_count, solutions);
+    printf("Solution count: %d\n", solution_count);
+    printf("Total time: %f\n", t2 - t1);
 }                                                 /* eight_queens_master */
 
 
@@ -259,6 +267,7 @@ void eight_queens_slave(int my_rank)
     int seed;
     int num_solutions = 0;
     int chessboard[QUEENS];
+    int i;
 
 	/*向主进程发送ready信号*/
     MPI_Send(&ready, 1, MPI_INT, 0, REPLY_TAG, MPI_COMM_WORLD);
@@ -273,12 +282,16 @@ void eight_queens_slave(int my_rank)
 			/* 从主进程接收初始棋盘 */
             MPI_Recv(&seed, 1, MPI_INT, 0, SEED_TAG, MPI_COMM_WORLD, &status);
 
-			/* 在初始棋盘基础上求解 */
-            chessboard[0] = seed / QUEENS;
-            chessboard[1] = seed % QUEENS;
 
             solution_count = 0;
-            place_queens(chessboard, 2);
+			/* 在初始棋盘基础上求解 */
+            #pragma omp parallel for private(i, chessboard) schedule(dynamic, 1)
+            for(i = 0; i < QUEENS; i++){
+                chessboard[0] = seed;
+                chessboard[1] = i;
+                if (!collides(0, seed, 1, i))
+                    place_queens(chessboard, 2);
+            }
 
 			/* 将解发送给主进程 */
             /*向主进程发送accomplished信号*/
