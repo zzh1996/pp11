@@ -16,7 +16,7 @@ void read_mat(FILE *fp, double *mat)
 {
     int coords[2];
     int dst;
-    if (rank == 0)
+    if (matrank == 0)
     {
         double *buf = malloc(sizeof(double) * block);
         for (int i = 0; i < n; i++)
@@ -31,14 +31,24 @@ void read_mat(FILE *fp, double *mat)
                     fscanf(fp, "%lf", &buf[k]);
                     //printf("%d %d %d %f\n",i,j,k,buf[k]);
                 }
-                MPI_Send(buf, block, MPI_DOUBLE, dst, 0, matcomm);
+                if (dst == 0)
+                {
+                    memcpy(&mat[i * block], buf, sizeof(double) * block);
+                }
+                else
+                {
+                    MPI_Send(buf, block, MPI_DOUBLE, dst, 0, matcomm);
+                }
             }
         }
         free(buf);
     }
-    for (int i = 0; i < block; i++)
+    else
     {
-        MPI_Recv(&mat[i * block], block, MPI_DOUBLE, 0, 0, matcomm, MPI_STATUS_IGNORE);
+        for (int i = 0; i < block; i++)
+        {
+            MPI_Recv(&mat[i * block], block, MPI_DOUBLE, 0, 0, matcomm, MPI_STATUS_IGNORE);
+        }
     }
 }
 
@@ -46,11 +56,14 @@ void print_mat(double *mat)
 {
     int coords[2];
     int src;
-    for (int i = 0; i < block; i++)
+    if (matrank != 0)
     {
-        MPI_Send(&mat[i * block], block, MPI_DOUBLE, 0, 0, matcomm);
+        for (int i = 0; i < block; i++)
+        {
+            MPI_Send(&mat[i * block], block, MPI_DOUBLE, 0, 0, matcomm);
+        }
     }
-    if (rank == 0)
+    else
     {
         double *buf = malloc(sizeof(double) * block);
         for (int i = 0; i < n; i++)
@@ -60,7 +73,14 @@ void print_mat(double *mat)
             {
                 coords[1] = j;
                 MPI_Cart_rank(matcomm, coords, &src);
-                MPI_Recv(buf, block, MPI_DOUBLE, src, 0, matcomm, MPI_STATUS_IGNORE);
+                if (src == 0)
+                {
+                    memcpy(buf, &mat[i * block], sizeof(double) * block);
+                }
+                else
+                {
+                    MPI_Recv(buf, block, MPI_DOUBLE, src, 0, matcomm, MPI_STATUS_IGNORE);
+                }
                 for (int k = 0; k < block; k++)
                 {
                     printf("%8.2f ", buf[k]);
@@ -92,7 +112,8 @@ void fox(double *A, double *B, double *C)
             for (int b = 0; b < block; b++)
                 for (int c = 0; c < block; c++)
                     C[a * block + b] += buf[a * block + c] * B[c * block + b];
-        MPI_Sendrecv_replace(B, block * block, MPI_DOUBLE, (row - 1 + sqrtp) % sqrtp, 0, (row + 1) % sqrtp, 0, colcomm, MPI_STATUS_IGNORE);
+        MPI_Sendrecv_replace(B, block * block, MPI_DOUBLE, (row - 1 + sqrtp) % sqrtp,
+                             0, (row + 1) % sqrtp, 0, colcomm, MPI_STATUS_IGNORE);
     }
 }
 

@@ -1,8 +1,10 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-void my_MPI_Allgather(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, MPI_Comm comm)
+void my_MPI_Allgather(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf,
+                        int recvcount, MPI_Datatype recvtype, MPI_Comm comm)
 {
     int rank, size, i, recvtypesize;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -22,12 +24,13 @@ void my_MPI_Allgather(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
             MPI_Recv(recvbuf + recvtypesize * i, recvcount, recvtype, i, 0, comm, MPI_STATUS_IGNORE);
         }
     }
+    memcpy(recvbuf + recvtypesize * rank, sendbuf, recvcount * recvtypesize);
 }
 
 int main(int argc, char **argv)
 {
     int rank, size, i, cnt;
-    int *data;
+    int *data, *data2;
     double t1, t2;
 
     MPI_Init(&argc, &argv);
@@ -38,10 +41,12 @@ int main(int argc, char **argv)
 
     data[rank] = rank;
 
+    data2 = malloc(size * sizeof(int));
+
     t1 = MPI_Wtime();
 
     for (cnt = 0; cnt < 1000000; cnt++)
-        my_MPI_Allgather(&data[rank], 1, MPI_INT, data, 1, MPI_INT, MPI_COMM_WORLD);
+        my_MPI_Allgather(&data[rank], 1, MPI_INT, data2, 1, MPI_INT, MPI_COMM_WORLD);
 
     t2 = MPI_Wtime();
 
@@ -50,20 +55,18 @@ int main(int argc, char **argv)
 
     for (i = 0; i < size; i++)
     {
-        if (data[i] != i)
+        if (data2[i] != i)
         {
             printf("Process %d data wrong!\n", rank);
         }
     }
 
-    data = malloc(size * sizeof(int));
-
-    data[rank] = rank;
+    data2 = malloc(size * sizeof(int));
 
     t1 = MPI_Wtime();
 
     for (cnt = 0; cnt < 1000000; cnt++)
-        MPI_Allgather(&data[rank], 1, MPI_INT, data, 1, MPI_INT, MPI_COMM_WORLD);
+        MPI_Allgather(&data[rank], 1, MPI_INT, data2, 1, MPI_INT, MPI_COMM_WORLD);
 
     t2 = MPI_Wtime();
 
@@ -72,7 +75,7 @@ int main(int argc, char **argv)
 
     for (i = 0; i < size; i++)
     {
-        if (data[i] != i)
+        if (data2[i] != i)
         {
             printf("Process %d data wrong!\n", rank);
         }
